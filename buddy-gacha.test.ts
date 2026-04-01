@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import {
   compareBuddyRolls,
+  detectLanguage,
   formatHelpText,
+  getMessages,
   shouldProceedWithOAuthWrite,
   type BuddyRoll,
 } from "./buddy-gacha";
@@ -40,7 +42,7 @@ describe("compareBuddyRolls", () => {
 
 describe("formatHelpText", () => {
   test("shows rarity probabilities matching the configured weights", () => {
-    const help = formatHelpText();
+    const help = formatHelpText("zh");
 
     expect(help).toContain("1 = ⚪ common     (50% 概率)");
     expect(help).toContain("2 = 🟢 uncommon   (30% 概率)");
@@ -49,11 +51,44 @@ describe("formatHelpText", () => {
   });
 
   test("uses the published CLI command in usage examples", () => {
-    const help = formatHelpText();
+    const help = formatHelpText("zh");
 
     expect(help).toContain("buddy-gacha [选项]");
     expect(help).toContain("buddy-gacha --rare 5");
     expect(help).not.toContain("bun buddy-gacha.ts");
+  });
+
+  test("defaults to English help text for non-Chinese locales", () => {
+    const help = formatHelpText("en");
+
+    expect(help).toContain("Usage:");
+    expect(help).toContain("buddy-gacha [options]");
+    expect(help).toContain("Auto-roll for legendary rarity");
+    expect(help).not.toContain("用法:");
+  });
+});
+
+describe("detectLanguage", () => {
+  test("picks Chinese for zh locales and English otherwise", () => {
+    expect(detectLanguage({ env: { LANG: "zh_CN.UTF-8" } })).toBe("zh");
+    expect(detectLanguage({ env: { LC_ALL: "zh-TW" } })).toBe("zh");
+    expect(detectLanguage({ env: { LANG: "en_US.UTF-8" } })).toBe("en");
+    expect(detectLanguage({ env: {}, locale: "en-US" })).toBe("en");
+    expect(detectLanguage({ env: {}, locale: "zh-CN" })).toBe("zh");
+  });
+});
+
+describe("getMessages", () => {
+  test("returns language-specific labels from one message factory", () => {
+    const zh = getMessages("zh");
+    const en = getMessages("en");
+
+    expect(zh.helpTitle).toContain("Buddy 抽卡系统");
+    expect(en.helpTitle).toContain("Buddy Gacha");
+    expect(zh.invalidSelection).toBe("❌ 无效选择");
+    expect(en.invalidSelection).toBe("❌ Invalid selection");
+    expect(zh.optionDescriptions.help).toBe("显示帮助信息");
+    expect(en.optionDescriptions.help).toBe("Show help information");
   });
 });
 
