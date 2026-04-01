@@ -5,6 +5,8 @@ import {
   detectLanguage,
   formatHelpText,
   getMessages,
+  hashString,
+  simulateRoll,
   shouldProceedWithOAuthWrite,
   type BuddyRoll,
 } from "./buddy-gacha";
@@ -40,14 +42,30 @@ describe("compareBuddyRolls", () => {
   });
 });
 
+describe("Claude Code compatibility", () => {
+  test("uses the same hash output as Claude Code for seeded buddy rolls", () => {
+    expect(hashString("cada3177aa96f7d61f23edb0c60e4a3fe8dcb7b361a9b764dae15d563a720649friend-2026-401")).toBe(
+      1681748562,
+    );
+  });
+
+  test("matches Claude Code buddy rarity for a known user id", () => {
+    const roll = simulateRoll(
+      "cada3177aa96f7d61f23edb0c60e4a3fe8dcb7b361a9b764dae15d563a720649",
+    );
+
+    expect(roll.rarity).toBe("rare");
+  });
+});
+
 describe("formatHelpText", () => {
   test("shows rarity probabilities matching the configured weights", () => {
     const help = formatHelpText("zh");
 
-    expect(help).toContain("1 = ⚪ common     (50% 概率)");
-    expect(help).toContain("2 = 🟢 uncommon   (30% 概率)");
-    expect(help).toContain("3 = 🔵 rare       (15% 概率)");
-    expect(help).not.toContain("1 = ⚪ common     (60% 概率)");
+    expect(help).toContain("1 = ⚪ common     (60% 概率)");
+    expect(help).toContain("2 = 🟢 uncommon   (25% 概率)");
+    expect(help).toContain("3 = 🔵 rare       (10% 概率)");
+    expect(help).not.toContain("1 = ⚪ common     (50% 概率)");
   });
 
   test("uses the published CLI command in usage examples", () => {

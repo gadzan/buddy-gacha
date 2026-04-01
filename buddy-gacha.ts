@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // buddy-gacha.ts
 
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -10,7 +10,13 @@ import { parseArgs } from "util";
 // ============ Buddy 生成逻辑（复制自 companion.ts） ============
 const SALT = "friend-2026-401";
 const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
-const RARITY_WEIGHTS = [50, 30, 15, 4, 1];
+const RARITY_WEIGHTS: Record<(typeof RARITIES)[number], number> = {
+  common: 60,
+  uncommon: 25,
+  rare: 10,
+  epic: 4,
+  legendary: 1,
+};
 const SPECIES = [
   "duck",
   "goose",
@@ -55,17 +61,27 @@ const LEVEL_TO_RARITY: Record<number, Rarity> = {
 };
 
 function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
   return function () {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-function hashString(s: string): number {
-  const hash = createHash("md5").update(s).digest();
-  return hash.readUInt32LE(0);
+export function hashString(s: string): number {
+  if (typeof Bun !== "undefined") {
+    return Number(BigInt(Bun.hash(s)) & 0xffffffffn);
+  }
+
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 function pick<T>(rng: () => number, arr: readonly T[]): T {
@@ -73,11 +89,11 @@ function pick<T>(rng: () => number, arr: readonly T[]): T {
 }
 
 function rollRarity(rng: () => number): Rarity {
-  const roll = rng() * 100;
-  let cumulative = 0;
-  for (let i = 0; i < RARITIES.length; i++) {
-    cumulative += RARITY_WEIGHTS[i];
-    if (roll < cumulative) return RARITIES[i];
+  const total = Object.values(RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
+  let roll = rng() * total;
+  for (const rarity of RARITIES) {
+    roll -= RARITY_WEIGHTS[rarity];
+    if (roll < 0) return rarity;
   }
   return "common";
 }
@@ -90,7 +106,7 @@ export type BuddyRoll = {
   shiny: boolean;
 };
 
-function simulateRoll(userID: string): BuddyRoll {
+export function simulateRoll(userID: string): BuddyRoll {
   const key = userID + SALT;
   const rng = mulberry32(hashString(key));
   const rarity = rollRarity(rng);
@@ -230,9 +246,9 @@ const MESSAGES = {
   buddy-gacha --rare 5 --shiny --species dragon --max-attempts 100000
 
 稀有度对应关系:
-  1 = ⚪ common     (50% 概率)
-  2 = 🟢 uncommon   (30% 概率)
-  3 = 🔵 rare       (15% 概率)
+  1 = ⚪ common     (60% 概率)
+  2 = 🟢 uncommon   (25% 概率)
+  3 = 🔵 rare       (10% 概率)
   4 = 🟣 epic       (4% 概率)
   5 = 🟡 legendary  (1% 概率)
   ✨ shiny         (1% 概率，独立判定)
@@ -360,9 +376,9 @@ Examples:
   buddy-gacha --rare 5 --shiny --species dragon --max-attempts 100000
 
 Rarity table:
-  1 = ⚪ common     (50%)
-  2 = 🟢 uncommon   (30%)
-  3 = 🔵 rare       (15%)
+  1 = ⚪ common     (60%)
+  2 = 🟢 uncommon   (25%)
+  3 = 🔵 rare       (10%)
   4 = 🟣 epic       (4%)
   5 = 🟡 legendary  (1%)
   ✨ shiny         (1%, independent roll)
@@ -584,7 +600,7 @@ async function autoRollMode(
   if (options.shiny) console.log(msg.shinyRequirement);
   if (options.species)
     console.log(msg.speciesRequirement(options.species));
-  console.log(msg.theoreticalRate(RARITY_WEIGHTS[RARITIES.indexOf(targetRarity)], Boolean(options.shiny)));
+  console.log(msg.theoreticalRate(RARITY_WEIGHTS[targetRarity], Boolean(options.shiny)));
 
   const maxAttempts = options.maxAttempts || 10000;
   console.log(msg.maxAttempts(maxAttempts));
