@@ -106,6 +106,18 @@ export type BuddyRoll = {
   shiny: boolean;
 };
 
+export type AutoRollOptions = {
+  shiny?: boolean;
+  species?: string;
+  maxAttempts?: number;
+  minRare?: boolean;
+};
+
+export type MatchedRoll = {
+  roll: BuddyRoll;
+  attempts: number;
+};
+
 export function simulateRoll(userID: string): BuddyRoll {
   const key = userID + SALT;
   const rng = mulberry32(hashString(key));
@@ -115,6 +127,29 @@ export function simulateRoll(userID: string): BuddyRoll {
   const shiny = rng() < 0.01;
 
   return { userID, rarity, species, eye, shiny };
+}
+
+export function matchesAutoRollCriteria(
+  roll: BuddyRoll,
+  targetLevel: number,
+  options: Pick<AutoRollOptions, "shiny" | "species" | "minRare">,
+): boolean {
+  const rarityMatch = options.minRare
+    ? RARITY_LEVEL[roll.rarity] >= targetLevel
+    : RARITY_LEVEL[roll.rarity] === targetLevel;
+  const shinyMatch = !options.shiny || roll.shiny;
+  const speciesMatch = !options.species || roll.species === options.species;
+
+  return rarityMatch && shinyMatch && speciesMatch;
+}
+
+export function buildAutoRollResult(matches: MatchedRoll[], maxAttempts: number) {
+  if (matches.length === 0) return undefined;
+
+  return {
+    matches,
+    firstHitAttempts: matches[0]?.attempts ?? maxAttempts,
+  };
 }
 
 // ============ 显示工具 ============
@@ -214,11 +249,12 @@ const MESSAGES = {
     显示 N 个随机 Buddy 供你选择
 
   自动刷稀有度模式:
-    使用 --rare 参数，自动刷到指定稀有度为止
+    使用 --rare 参数，自动刷到精确指定稀有度为止
 
 选项:
-  -r, --rare <1-5>        自动刷到指定稀有度
+  -r, --rare <1-5>        自动刷到精确指定稀有度
                           1=common, 2=uncommon, 3=rare, 4=epic, 5=legendary
+  --min-rare             匹配指定稀有度或更高稀有度
   -s, --shiny             要求必须是闪光 (配合 --rare 使用)
   --species <name>        要求特定种族 (配合 --rare 使用)
                           可选: ${speciesList}
@@ -236,8 +272,11 @@ const MESSAGES = {
   # 自动刷传说稀有度
   buddy-gacha --rare 5
 
-  # 自动刷史诗稀有度，且必须是闪光
+  # 自动刷精确史诗稀有度，且必须是闪光
   buddy-gacha --rare 4 --shiny
+
+  # 自动刷史诗或更高稀有度，且必须是闪光
+  buddy-gacha --rare 4 --min-rare --shiny
 
   # 自动刷传说稀有度，且必须是 dragon
   buddy-gacha --rare 5 --species dragon
@@ -259,11 +298,12 @@ const MESSAGES = {
   • 使用自动模式时请耐心等待，传说+闪光期望需要 10,000 次尝试
 `,
     optionDescriptions: {
-      rare: "自动刷到指定稀有度 (1-5: common/uncommon/rare/epic/legendary)",
+      rare: "自动刷到精确指定稀有度 (1-5: common/uncommon/rare/epic/legendary)",
       shiny: "要求必须是闪光 (配合 --rare 使用)",
       species: "要求特定种族 (duck/cat/dragon等)",
       count: "交互模式下生成的 Buddy 数量",
       maxAttempts: "自动模式最大尝试次数",
+      minRare: "匹配指定稀有度或更高稀有度",
       help: "显示帮助信息",
     },
   },
@@ -344,11 +384,12 @@ Modes:
     Show N random buddies and let you choose one
 
   Auto-roll mode:
-    Use --rare to keep rolling until the target rarity appears
+    Use --rare to keep rolling until the exact target rarity appears
 
 Options:
-  -r, --rare <1-5>        Auto-roll until the target rarity
+  -r, --rare <1-5>        Auto-roll until the exact target rarity
                           1=common, 2=uncommon, 3=rare, 4=epic, 5=legendary
+  --min-rare             Match the target rarity or higher tiers
   -s, --shiny             Require shiny (used with --rare)
   --species <name>        Require a specific species (used with --rare)
                           Available: ${speciesList}
@@ -366,8 +407,11 @@ Examples:
   # Auto-roll for legendary rarity
   buddy-gacha --rare 5
 
-  # Auto-roll for epic rarity and require shiny
+  # Auto-roll for exact epic rarity and require shiny
   buddy-gacha --rare 4 --shiny
+
+  # Auto-roll for epic or higher rarity and require shiny
+  buddy-gacha --rare 4 --min-rare --shiny
 
   # Auto-roll for legendary rarity and require dragon
   buddy-gacha --rare 5 --species dragon
@@ -389,11 +433,12 @@ Notes:
   • Auto-roll can take time; shiny legendary has a 10,000-roll expected rate
 `,
     optionDescriptions: {
-      rare: "Auto-roll until the target rarity (1-5: common/uncommon/rare/epic/legendary)",
+      rare: "Auto-roll until the exact target rarity (1-5: common/uncommon/rare/epic/legendary)",
       shiny: "Require shiny (used with --rare)",
       species: "Require a specific species (duck/cat/dragon, etc.)",
       count: "Number of buddies in interactive mode",
       maxAttempts: "Maximum attempts in auto-roll mode",
+      minRare: "Match the target rarity or higher tiers",
       help: "Show help information",
     },
   },
@@ -436,12 +481,17 @@ export function compareBuddyRolls(a: BuddyRoll, b: BuddyRoll): number {
   return a.shiny ? -1 : 1;
 }
 
-function formatBuddy(roll: BuddyRoll, index?: number, lang: Lang = detectLanguage()): string {
+function getUserIdTail(userID: string, length = 6): string {
+  return userID.slice(-length);
+}
+
+export function formatBuddy(roll: BuddyRoll, index?: number, lang: Lang = detectLanguage()): string {
   const msg = getMessages(lang);
   const emoji = RARITY_EMOJI[roll.rarity];
   const shinyMark = roll.shiny ? "✨" : "  ";
   const prefix = index ? `${index}. ` : "";
-  return `${prefix}${emoji} ${shinyMark} ${roll.rarity.toUpperCase().padEnd(10)} | ${roll.species.padEnd(10)} | ${roll.eye} ${msg.eyeLabel}`;
+  const tailLabel = lang === "zh" ? "尾号" : "Tail";
+  return `${prefix}${emoji} ${shinyMark} ${roll.rarity.toUpperCase().padEnd(10)} | ${roll.species.padEnd(10)} | ${roll.eye} ${msg.eyeLabel} | ${tailLabel}: ${getUserIdTail(roll.userID)}`;
 }
 
 // ============ 配置文件操作 ============
@@ -581,11 +631,7 @@ async function selectFromMatches(matches: BuddyRoll[]): Promise<boolean> {
 // ============ 自动刷稀有度模式 ============
 async function autoRollMode(
   targetLevel: number,
-  options: {
-    shiny?: boolean;
-    species?: string;
-    maxAttempts?: number;
-  },
+  options: AutoRollOptions,
 ) {
   const lang = detectLanguage();
   const msg = getMessages(lang);
@@ -639,18 +685,16 @@ async function autoRollMode(
     }
 
     // 检查是否满足条件
-    const rarityMatch = RARITY_LEVEL[roll.rarity] >= targetLevel;
-    const shinyMatch = !options.shiny || roll.shiny;
-    const speciesMatch = !options.species || roll.species === options.species;
-
-    if (rarityMatch && shinyMatch && speciesMatch) {
+    if (matchesAutoRollCriteria(roll, targetLevel, options)) {
       matches.push({ roll, attempts });
 
       // 收集到 10 个或达到上限时停下来让用户选择
       if (matches.length >= 10 || attempts >= maxAttempts) {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const result = buildAutoRollResult(matches, maxAttempts);
+        if (!result) break;
         msg
-          .distributionSummary(matches.length, matches[0].attempts, elapsed, stats, attempts)
+          .distributionSummary(matches.length, result.firstHitAttempts, elapsed, stats, attempts)
           .forEach((line) => console.log(line));
 
         const chosen = await selectFromMatches(matches.map((m) => m.roll));
@@ -661,6 +705,20 @@ async function autoRollMode(
         return;
       }
     }
+  }
+
+  const result = buildAutoRollResult(matches, maxAttempts);
+  if (result) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    msg
+      .distributionSummary(matches.length, result.firstHitAttempts, elapsed, stats, attempts)
+      .forEach((line) => console.log(line));
+
+    const chosen = await selectFromMatches(matches.map((m) => m.roll));
+    if (chosen) return;
+
+    console.log(`\n${msg.cancelledNoChange}`);
+    return;
   }
 
   msg.maxAttemptsReached(maxAttempts).forEach((line) => console.log(line));
@@ -756,6 +814,10 @@ async function main() {
         type: "string",
         description: msg.optionDescriptions.species,
       },
+      "min-rare": {
+        type: "boolean",
+        description: msg.optionDescriptions.minRare,
+      },
       count: {
         type: "string",
         short: "c",
@@ -794,6 +856,7 @@ async function main() {
     await autoRollMode(targetLevel, {
       shiny: values.shiny as boolean,
       species: values.species as string | undefined,
+      minRare: values["min-rare"] as boolean,
       maxAttempts: parseInt(values["max-attempts"] as string, 10),
     });
   } else {

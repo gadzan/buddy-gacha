@@ -6,7 +6,7 @@ A small CLI for rolling a new Claude Code buddy profile by generating candidate 
 
 - Generates deterministic buddy results from random `userID` candidates.
 - Lets you pick from a sorted list in interactive mode.
-- Supports auto-roll mode for target rarity, optional shiny, and optional species filters.
+- Supports auto-roll mode for an exact target rarity, optional shiny, optional species filters, and optional `--min-rare` matching.
 - Clears cached companion-related fields so the new buddy can take effect after restart.
 
 ## Install
@@ -49,10 +49,16 @@ Interactive mode with more candidates:
 npx buddy-gacha --count 50
 ```
 
-Auto-roll for a target rarity:
+Auto-roll for an exact target rarity:
 
 ```bash
 npx buddy-gacha --rare 5
+```
+
+Auto-roll for the target rarity or higher:
+
+```bash
+npx buddy-gacha --rare 4 --min-rare
 ```
 
 Auto-roll for a shiny dragon:
@@ -65,13 +71,15 @@ npx buddy-gacha --rare 5 --shiny --species dragon --max-attempts 100000
 
 | Level | Rarity | Weight |
 | --- | --- | --- |
-| 1 | common | 50% |
-| 2 | uncommon | 30% |
-| 3 | rare | 15% |
+| 1 | common | 60% |
+| 2 | uncommon | 25% |
+| 3 | rare | 10% |
 | 4 | epic | 4% |
 | 5 | legendary | 1% |
 
 Shiny is an independent 1% roll.
+
+By default, `--rare` means an exact rarity match. Add `--min-rare` if you want to accept higher rarities too.
 
 ## Important Notes
 

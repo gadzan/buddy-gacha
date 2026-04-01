@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import {
+  buildAutoRollResult,
   compareBuddyRolls,
   detectLanguage,
   formatHelpText,
+  formatBuddy,
   getMessages,
   hashString,
+  matchesAutoRollCriteria,
   simulateRoll,
   shouldProceedWithOAuthWrite,
   type BuddyRoll,
@@ -39,6 +42,92 @@ describe("compareBuddyRolls", () => {
     expect(compareBuddyRolls(shinyRare, normalRare)).toBeLessThan(0);
     expect(compareBuddyRolls(normalRare, shinyRare)).toBeGreaterThan(0);
     expect(compareBuddyRolls(shinyRare, shinyRare)).toBe(0);
+  });
+});
+
+describe("formatBuddy", () => {
+  test("shows the last 6 characters of the user id in the option line", () => {
+    const roll: BuddyRoll = {
+      userID: "1234567890abcdef",
+      rarity: "epic",
+      species: "dragon",
+      eye: "@",
+      shiny: true,
+    };
+
+    const line = formatBuddy(roll, 3, "en");
+
+    expect(line).toContain("3.");
+    expect(line).toContain("Tail: abcdef");
+  });
+});
+
+describe("matchesAutoRollCriteria", () => {
+  test("treats --rare as an exact rarity match by default", () => {
+    const epicShiny: BuddyRoll = {
+      userID: "epic-shiny",
+      rarity: "epic",
+      species: "dragon",
+      eye: "@",
+      shiny: true,
+    };
+    const legendaryShiny: BuddyRoll = {
+      userID: "legendary-shiny",
+      rarity: "legendary",
+      species: "dragon",
+      eye: "@",
+      shiny: true,
+    };
+
+    expect(matchesAutoRollCriteria(epicShiny, 4, { shiny: true })).toBe(true);
+    expect(matchesAutoRollCriteria(legendaryShiny, 4, { shiny: true })).toBe(false);
+  });
+
+  test("still supports minimum-rarity matching when explicitly requested", () => {
+    const legendaryShiny: BuddyRoll = {
+      userID: "legendary-shiny",
+      rarity: "legendary",
+      species: "dragon",
+      eye: "@",
+      shiny: true,
+    };
+
+    expect(
+      matchesAutoRollCriteria(legendaryShiny, 4, { shiny: true, minRare: true }),
+    ).toBe(true);
+  });
+});
+
+describe("buildAutoRollResult", () => {
+  test("returns partial matches when max attempts is reached after finding some", () => {
+    const partialMatches = [
+      {
+        roll: {
+          userID: "one",
+          rarity: "legendary",
+          species: "duck",
+          eye: "·",
+          shiny: true,
+        },
+        attempts: 120,
+      },
+      {
+        roll: {
+          userID: "two",
+          rarity: "legendary",
+          species: "cat",
+          eye: "@",
+          shiny: true,
+        },
+        attempts: 250,
+      },
+    ];
+
+    expect(buildAutoRollResult(partialMatches, 5000)?.matches).toHaveLength(2);
+  });
+
+  test("returns no selection payload when nothing matched", () => {
+    expect(buildAutoRollResult([], 5000)).toBeUndefined();
   });
 });
 
