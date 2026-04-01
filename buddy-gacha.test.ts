@@ -73,3 +73,20 @@ describe("package metadata", () => {
     expect(readme).toContain("No global install is required");
   });
 });
+
+describe("release workflow", () => {
+  test("uses release-published trigger with Bun-based verify and publish jobs", () => {
+    const workflow = readFileSync("./.github/workflows/release.yml", "utf8");
+
+    expect(workflow).toContain("release:");
+    expect(workflow).toContain("types: [published]");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("oven-sh/setup-bun@v2");
+    expect(workflow).toContain("npm test");
+    expect(workflow).toContain("npm run build");
+    expect(workflow).toContain("npm publish");
+    expect(workflow).toContain("NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}");
+    expect(workflow).not.toContain("cache: npm");
+    expect(workflow).not.toContain("bun install --frozen-lockfile");
+  });
+});

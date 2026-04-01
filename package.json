@@ -2,9 +2,15 @@
   "name": "buddy-gacha",
   "version": "1.0.0",
   "description": "A small Bun CLI for rolling and selecting Claude Code buddy profiles.",
+  "author": "gadzan",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "buddy-gacha": "./dist/buddy-gacha.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gadzan/buddy-gacha.git"
   },
   "scripts": {
     "build": "bun build ./buddy-gacha.ts --outfile ./dist/buddy-gacha.js --target node",
@@ -24,8 +30,6 @@
     "gacha",
     "buddy"
   ],
-  "author": "",
-  "license": "ISC",
   "engines": {
     "node": ">=18"
   }
