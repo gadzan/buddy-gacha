@@ -1,0 +1,32 @@
+{
+  "name": "buddy-gacha",
+  "version": "1.0.0",
+  "description": "A small Bun CLI for rolling and selecting Claude Code buddy profiles.",
+  "type": "module",
+  "bin": {
+    "buddy-gacha": "./dist/buddy-gacha.js"
+  },
+  "scripts": {
+    "build": "bun build ./buddy-gacha.ts --outfile ./dist/buddy-gacha.js --target node",
+    "start": "bun ./buddy-gacha.ts",
+    "test": "bun test ./buddy-gacha.test.ts",
+    "help": "bun ./buddy-gacha.ts --help",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "bun",
+    "cli",
+    "claude-code",
+    "gacha",
+    "buddy"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  }
+}
