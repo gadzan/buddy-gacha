@@ -1,6 +1,6 @@
 {
   "name": "buddy-gacha",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A small Bun CLI for rolling and selecting Claude Code buddy profiles.",
   "author": "gadzan",
   "license": "MIT",
